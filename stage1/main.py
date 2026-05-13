@@ -49,7 +49,7 @@ def process_ngrams(entries: List[str], laplace_smoothing: int) -> Dict[int, Dict
     }
     return ngram_occurrences
 
-def get_ngram_differences(ngrams_a: Dict[int, Dict[str, Tuple[int, float, float]]], ngrams_b: Dict[int, Dict[str, Tuple[int, float, float]]]) -> Dict[int, Dict[str, float]]:
+def get_ngram_differences(ngrams_a: Dict[int, Dict[str, Tuple[int, float, float]]], ngrams_b: Dict[int, Dict[str, Tuple[int, float, float]]], normalize_occurrences=False) -> Dict[int, Dict[str, float]]:
     differences = {
         1: {},
         2: {},
@@ -59,24 +59,52 @@ def get_ngram_differences(ngrams_a: Dict[int, Dict[str, Tuple[int, float, float]
     for n in range(1, 5):
         for ngram in ngrams_a[n].keys():
             if ngram in ngrams_b[n]:
-                # TODO implement laplace smoothing
                 relative_a = ngrams_a[n][ngram][2]
                 relative_b = ngrams_b[n][ngram][2]
                 differences[n][ngram] = relative_a - relative_b
+
+                if normalize_occurrences:
+                    differences[n][ngram] /= (ngrams_a[n][ngram][1] + ngrams_b[n][ngram][1])
     return differences
 
-def classify(text: str, ngram_differences: Dict[int, Dict[str, float]]) -> float:
+def normalize_averages(differences: Dict[int, Dict[str, float]]) -> None:
+    for n in range(1, 5):
+        average = sum(differences[n].values()) / len(differences[n])
+        for ngram in differences[n].keys():
+            differences[n][ngram] -= average
+
+def remove_ngrams(ngrams: Dict[int, Dict[str, float]], ignore_ngrams: List[str]) -> None:
+    for ngram in ignore_ngrams:
+        for n in range(1, 5):
+            if ngram in ngrams[n]:
+                del ngrams[n][ngram]
+
+def classify(text: str, ngram_differences: Dict[int, Dict[str, float]], print_ratings = 0) -> float:
     estimate = 0
+    ratings = []
     for n in range(1, 5):
         for ngram in generate_ngrams(text, n):
             if ngram in ngram_differences[n]:
+                if print_ratings:
+                    ratings.append((ngram, ngram_differences[n][ngram]))
                 estimate += ngram_differences[n][ngram]
+
+    if print_ratings:
+        ratings.sort(key=lambda x: abs(x[1]), reverse=True)
+        print(f"{text}:")
+        for ngram, rating in ratings:
+            print(f"{ngram}: {rating:.7f}")
     return estimate
 
 def test(data: List[List[str]], ngram_differences: Dict[int, Dict[str, float]]) -> List[Tuple[str, str, float]]:
     classified_data = []
     for entry in data:
-        classified_data.append((entry[0], entry[1], classify(entry[0], ngram_differences)))
+        rating = classify(entry[0], ngram_differences)
+        if rating > 0 != (entry[1].lower() == 'opinion'):
+            print(f"Misclassification as {'Fact' if rating > 0 else 'Opinion'}({rating:.6f}), True: {entry[1]}")
+            classify(entry[0], ngram_differences, 10)
+            print()
+        classified_data.append((entry[0], entry[1], rating))
     return classified_data
 
 def main() -> None:
@@ -93,16 +121,25 @@ def main() -> None:
     train_facts = [preprocess_text(entry[0]) for entry in train_data if entry[1].lower() == 'fact']
     train_opinions = [preprocess_text(entry[0]) for entry in train_data if entry[1].lower() == 'opinion']
 
-    train_fact_ngrams = process_ngrams(train_facts, 5)
-    train_opinion_ngrams = process_ngrams(train_opinions, 5)
+    normalize_ngram_average = True
+    normalize_ngram_occurrences = True
+    laplace_smoothing = 4
+    ignore_ngrams = []
 
-    differences = get_ngram_differences(train_fact_ngrams, train_opinion_ngrams)
+    train_fact_ngrams = process_ngrams(train_facts, laplace_smoothing)
+    train_opinion_ngrams = process_ngrams(train_opinions, laplace_smoothing)
 
-    trial = test(test_data, differences)
+    ngram_factuality_ratings = get_ngram_differences(train_fact_ngrams, train_opinion_ngrams, normalize_ngram_occurrences)
+    if normalize_ngram_average:
+        normalize_averages(ngram_factuality_ratings)
+    remove_ngrams(ngram_factuality_ratings, ignore_ngrams)
+
+    trial = test(test_data, ngram_factuality_ratings)
 
     misclassified = [entry for entry in trial if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
-    # TODO normalize differences
-    pass
+    print(f"Test facts: {len([entry for entry in test_data if entry[1].lower() == 'fact'])}, Test opinions: {len([entry for entry in test_data if entry[1].lower() == 'opinion'])}")
+    print(f"Misclassification rate: {len(misclassified)}/{len(trial)} ({len(misclassified) / len(trial) * 100:.2f}%)")
+
 
 
 
