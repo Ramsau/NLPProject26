@@ -1,4 +1,5 @@
 import csv
+from doctest import TestResults
 from typing import List, Any, Dict, Tuple, Callable, Optional
 import re
 
@@ -20,14 +21,27 @@ def test(data: List[List[str]], preprocess: Callable[[str], str], classify: Call
     for entry in data:
         preprocessed_text = preprocess(entry[0])
         rating = classify(preprocessed_text, knowledge_base)
-        if rating > 0 != (entry[1].lower() == 'opinion') and verbose:
+        if (rating > 0) != (entry[1].lower() == 'fact') and verbose:
             print(f"Misclassification as {'Fact' if rating > 0 else 'Opinion'}({rating:.6f}), True: {entry[1]}")
             print(entry[0])
             print(preprocessed_text)
-            classify(preprocessed_text, knowledge_base, 10)
+            # classify(preprocessed_text, knowledge_base, 10)
             print()
         classified_data.append((entry[0], entry[1], rating))
     return classified_data
+
+def combine_classifications(ngram_results: TestResult, pos_results: TestResult, verbose = False) -> TestResult:
+    results = []
+    for ngram_result, pos_result in zip(ngram_results, pos_results):
+        classification = (ngram_result[2] + pos_result[2]) / 2
+        results.append((ngram_result[0], ngram_result[1], classification))
+
+        if verbose and (classification > 0) != (ngram_result[1].lower() == 'fact'):
+            print(f"Misclassification as {'Fact' if classification > 0 else 'Opinion'}({classification:.6f}, {ngram_result[2]:.6f}/{pos_result[2]:.6f}), True: {ngram_result[1]}")
+            print(ngram_result[0])
+            print()
+
+    return results
 
 def main() -> None:
     with open('../dataset.csv', 'r') as file:
@@ -43,36 +57,37 @@ def main() -> None:
     train_facts = [entry[0] for entry in train_data if entry[1].lower() == 'fact']
     train_opinions = [entry[0] for entry in train_data if entry[1].lower() == 'opinion']
 
-    normalize_ngram_average = True
-    normalize_ngram_occurrences = True
-    laplace_smoothing = 4
-    ignore_ngrams = []
+    print(f"Test facts: {len([entry for entry in test_data if entry[1].lower() == 'fact'])}, Test opinions: {len([entry for entry in test_data if entry[1].lower() == 'opinion'])}")
 
     train_facts_pp_ngram = [preprocess_text_ngram(text) for text in train_facts]
     train_opinions_pp_ngram = [preprocess_text_ngram(text) for text in train_opinions]
     ngram_factuality_ratings = build_ngram_knowledge_base(train_facts_pp_ngram, train_opinions_pp_ngram,
-                                                          normalize_ngram_average,
-                                                          normalize_ngram_occurrences,
-                                                          laplace_smoothing,
-                                                          ignore_ngrams)
+                                                          normalize_ngram_bias=False,
+                                                          normalize_ngram_gain=True,
+                                                          normalize_ngram_occurrences=True,
+                                                          laplace_smoothing=4,
+                                                          ignore_ngrams=[])
 
-
-    trial = test(test_data, preprocess_text_ngram, classify_ngrams, ngram_factuality_ratings, verbose=True)
-
-    misclassified = [entry for entry in trial if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
-    print(f"Test facts: {len([entry for entry in test_data if entry[1].lower() == 'fact'])}, Test opinions: {len([entry for entry in test_data if entry[1].lower() == 'opinion'])}")
-    print(f"Misclassification rate: {len(misclassified)}/{len(trial)} ({len(misclassified) / len(trial) * 100:.2f}%)")
+    trial_ngram = test(test_data, preprocess_text_ngram, classify_ngrams, ngram_factuality_ratings, verbose=True)
+    misclassified = [entry for entry in trial_ngram if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
+    print(f"Misclassification rate (ngram): {len(misclassified)}/{len(trial_ngram)} ({len(misclassified) / len(trial_ngram) * 100:.2f}%)")
 
     train_facts_pp_pos = [preprocess_text_pos(text) for text in train_facts]
     train_opinions_pp_pos = [preprocess_text_pos(text) for text in train_opinions]
-    pos_factuality_ratings = build_pos_knowledge_base(train_facts_pp_pos, train_opinions_pp_pos)
+    pos_factuality_ratings = build_pos_knowledge_base(train_facts_pp_pos, train_opinions_pp_pos,
+                                                      normalize_ngram_bias=False,
+                                                      normalize_ngram_gain=True,
+                                                      normalize_ngram_occurrences=True,
+                                                      laplace_smoothing=4,
+                                                      ignore_ngrams=[])
 
-    trial = test(test_data, preprocess_text_pos, classify_ngrams, pos_factuality_ratings, verbose=True)
-    misclassified = [entry for entry in trial if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
-    print(f"Misclassification rate (POS): {len(misclassified)}/{len(trial)} ({len(misclassified) / len(trial) * 100:.2f}%)")
+    trial_pos = test(test_data, preprocess_text_pos, classify_ngrams, pos_factuality_ratings, verbose=True)
+    misclassified = [entry for entry in trial_pos if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
+    print(f"Misclassification rate (POS): {len(misclassified)}/{len(trial_pos)} ({len(misclassified) / len(trial_pos) * 100:.2f}%)")
 
-
-
+    trial_combined = combine_classifications(trial_ngram, trial_pos, verbose=True)
+    misclassified = [entry for entry in trial_combined if (entry[2] < 0) != (entry[1].lower() == 'opinion')]
+    print(f"Misclassification rate (Combined): {len(misclassified)}/{len(trial_combined)} ({len(misclassified) / len(trial_combined) * 100:.2f}%)")
 
 if __name__ == '__main__':
     main()

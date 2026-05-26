@@ -74,8 +74,21 @@ def get_ngram_differences(ngrams_a: CountedNgrams, ngrams_b: CountedNgrams, norm
 def normalize_averages(differences: NgramRatings) -> None:
     for n in range(1, 5):
         average = sum(differences[n].values()) / len(differences[n])
+        print(average)
         for ngram in differences[n].keys():
             differences[n][ngram] -= average
+
+def normalize_gain(differences: NgramRatings) -> None:
+    gain = 0
+    count = 0
+    for n in range(1, 5):
+        gain += sum([abs(x) for x in differences[n].values()])
+        count += len(differences[n])
+    gain /= count
+
+    for n in range(1, 5):
+        for ngram in differences[n].keys():
+            differences[n][ngram] /= gain
 
 def remove_ngrams(ngrams: NgramRatings, ignore_ngrams: List[str]) -> None:
     for ngram in ignore_ngrams:
@@ -85,6 +98,7 @@ def remove_ngrams(ngrams: NgramRatings, ignore_ngrams: List[str]) -> None:
 
 def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> float:
     estimate = 0
+    count = 0
     ratings = []
     for n in range(1, 5):
         for ngram in generate_ngrams(text, n):
@@ -92,6 +106,9 @@ def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> f
                 if print_ratings:
                     ratings.append((ngram, ngram_differences[n][ngram]))
                 estimate += ngram_differences[n][ngram]
+                count += 1
+
+    estimate /= count
 
     if print_ratings:
         ratings.sort(key=lambda x: abs(x[1]), reverse=True)
@@ -101,7 +118,8 @@ def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> f
 
 
 def build_knowledge_base(train_a: List[str], train_b: List[str],
-                         normalize_ngram_average=False,
+                         normalize_ngram_bias=False,
+                         normalize_ngram_gain=False,
                          normalize_ngram_occurrences=False,
                          laplace_smoothing=0,
                          ignore_ngrams: List[str]=[]) -> NgramRatings:
@@ -109,7 +127,10 @@ def build_knowledge_base(train_a: List[str], train_b: List[str],
     train_b_ngrams = process_ngrams(train_b, laplace_smoothing)
 
     differences = get_ngram_differences(train_a_ngrams, train_b_ngrams, normalize_ngram_occurrences)
-    if normalize_ngram_average:
+
+    if normalize_ngram_gain:
+        normalize_gain(differences)
+    if normalize_ngram_bias:
         normalize_averages(differences)
     remove_ngrams(differences, ignore_ngrams)
     return differences
