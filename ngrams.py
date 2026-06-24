@@ -96,7 +96,7 @@ def remove_ngrams(ngrams: NgramRatings, ignore_ngrams: List[str]) -> None:
             if ngram in ngrams[n]:
                 del ngrams[n][ngram]
 
-def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> float:
+def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> Tuple[float, List]:
     estimate = 0
     count = 0
     ratings = []
@@ -108,13 +108,15 @@ def classify(text: str, ngram_differences: NgramRatings, print_ratings = 0) -> f
                 estimate += ngram_differences[n][ngram]
                 count += 1
 
-    estimate /= count
+    if count != 0:
+        estimate /= count
 
     if print_ratings:
         ratings.sort(key=lambda x: abs(x[1]), reverse=True)
-        for ngram, rating in ratings:
-            print(f"{ngram}: {rating:.7f}")
-    return estimate
+        ratings = [(ngram, rating / count) for ngram, rating in ratings]
+
+
+    return estimate, ratings
 
 
 def build_knowledge_base(train_a: List[str], train_b: List[str],
