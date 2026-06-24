@@ -146,7 +146,7 @@ def classify(ngram_kb, pos_kb, data):
     return trial_combined
 
 def main() -> None:
-    with open('dataset.csv', 'r') as file:
+    with open('../dataset.csv', 'r') as file:
         csv_reader = csv.reader(file)
         data = list(csv_reader)
 
@@ -172,7 +172,7 @@ def main() -> None:
 
     print()
     print("Validation dataset...")
-    with open("validationset.csv", 'r') as file:
+    with open("../validationset.csv", 'r') as file:
         csv_reader = csv.reader(file)
         val_data = list(csv_reader)
     # discard header
@@ -181,7 +181,7 @@ def main() -> None:
 
     class_data = classify(ngram_kb, pos_kb, val_data)
     classification_output = [[entry[0], 'fact' if entry[2] > 0 else 'opinion'] for entry in class_data]
-    with open("group29_classifications_1.csv", 'w+') as file:
+    with open("../group29_classifications_1.csv", 'w+') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerows(classification_output)
 
