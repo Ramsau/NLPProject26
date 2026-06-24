@@ -180,7 +180,7 @@ def main() -> None:
     val_data = [[entry[0], 'unknown'] for entry in val_data]
 
     class_data = classify(ngram_kb, pos_kb, val_data)
-    classification_output = [[entry[0], 'fact' if entry[2] > 0 else 'opinion'] for entry in class_data]
+    classification_output = [["ID", "Verdict"]] + [[id + 1, 'Fact' if entry[2] > 0 else 'Opinion'] for id, entry in enumerate(class_data)]
     with open("../group29_classifications_1.csv", 'w+') as file:
         csv_writer = csv.writer(file)
         csv_writer.writerows(classification_output)

@@ -12,3 +12,4 @@ python stage1/main.py
 
 
 Note that stage2 was not implemented, see report.
+The format of the group29_classifications_X.csv file was inferred from the submission template.
